@@ -35,7 +35,7 @@ export default async function MyPage() {
       detail: employee.careerSummary ? "登録済み" : "未登録",
       href: "/career-summary",
     },
-    { label: "スキル", detail: `${employee._count.skills}件` },
+    { label: "スキル", detail: `${employee._count.skills}件`, href: "/skills" },
     {
       label: "資格",
       detail: `${employee._count.certifications}件`,
