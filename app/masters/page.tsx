@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 type MasterLink = { label: string; href?: string };
 
 const MASTER_LINKS: MasterLink[] = [
-  { label: "スキルマスタ管理" },
+  { label: "スキルマスタ管理", href: "/masters/skills" },
   { label: "資格マスタ管理", href: "/masters/certifications" },
   { label: "現場ポジションマスタ管理", href: "/masters/project-roles" },
   { label: "部署マスタ管理", href: "/masters/organization-units" },
