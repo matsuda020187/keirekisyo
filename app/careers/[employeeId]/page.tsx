@@ -1,49 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { findDepartmentId } from "@/lib/organization-unit";
-import { PROCESS_FIELDS } from "../../projects/schema";
-
-const GENDER_LABELS: Record<string, string> = { MALE: "男性", FEMALE: "女性", OTHER: "その他" };
-const SCHOOL_TYPE_LABELS: Record<string, string> = {
-  HIGH_SCHOOL: "高校",
-  VOCATIONAL_SCHOOL: "専門学校",
-  JUNIOR_COLLEGE: "短大",
-  UNIVERSITY: "大学",
-  GRADUATE_SCHOOL: "大学院",
-};
-const GRADUATION_STATUS_LABELS: Record<string, string> = { GRADUATED: "卒業", WITHDRAWN: "中退" };
-const SKILL_LEVEL_LABELS: Record<string, string> = {
-  EXPERT: "◎得意",
-  PROFICIENT: "○経験あり",
-  BASIC: "△基礎知識",
-};
-const PROCESS_LABELS: Record<string, string> = {
-  researchAnalysis: "調査分析",
-  requirementsDefinition: "要件定義",
-  basicDesign: "基本設計",
-  detailedDesign: "詳細設計",
-  development: "製造",
-  testing: "テスト",
-  operation: "運用",
-};
-
-function formatDate(date: Date | null): string {
-  if (!date) return "-";
-  return `${date.getUTCFullYear()}/${date.getUTCMonth() + 1}/${date.getUTCDate()}`;
-}
-
-function formatMonth(date: Date | null): string {
-  if (!date) return "-";
-  return `${date.getUTCFullYear()}/${date.getUTCMonth() + 1}`;
-}
-
-// プロジェクト期間はend_date=NULLが「現在」進行中を意味するため専用の表示にする
-function formatProjectEndMonth(date: Date | null): string {
-  if (!date) return "現在";
-  return `${date.getUTCFullYear()}/${date.getUTCMonth() + 1}`;
-}
+import {
+  canViewResume,
+  formatDate,
+  formatMonth,
+  formatProjectEndMonth,
+  getActiveProcesses,
+  getResumeData,
+  GENDER_LABELS,
+  GRADUATION_STATUS_LABELS,
+  PROCESS_LABELS,
+  SCHOOL_TYPE_LABELS,
+  SKILL_LEVEL_LABELS,
+} from "@/lib/resume-data";
 
 export default async function CareerDetailPage({
   params,
@@ -56,42 +26,11 @@ export default async function CareerDetailPage({
   if (!viewerEmployeeId || !viewerRole) redirect("/login");
 
   const { employeeId } = await params;
-
-  const employee = await prisma.employee.findUniqueOrThrow({
-    where: { employeeId },
-    include: {
-      organizationUnit: true,
-      skills: {
-        where: { deletedAt: null },
-        include: { skill: { include: { skillCategory: true } }, skillVersion: true },
-      },
-      certifications: {
-        where: { deletedAt: null },
-        include: { certification: true },
-        orderBy: { acquiredDate: "asc" },
-      },
-      projects: {
-        where: { deletedAt: null },
-        include: {
-          site: true,
-          roleLinks: { where: { deletedAt: null }, include: { projectRole: true } },
-          detail: true,
-          skills: { where: { deletedAt: null }, include: { skill: true, skillVersion: true } },
-        },
-        orderBy: { startDate: "desc" },
-      },
-    },
-  });
+  const employee = await getResumeData(employeeId);
 
   const isOwnProfile = employeeId === viewerEmployeeId;
-
-  // 認可: 人事・営業/管理職は全員閲覧可。一般社員は本人または同一部署のみ(docs/screens.md REF002参照)
-  if (viewerRole === "GENERAL_STAFF" && !isOwnProfile) {
-    const units = await prisma.organizationUnit.findMany({ where: { deletedAt: null } });
-    const viewer = await prisma.employee.findUniqueOrThrow({ where: { employeeId: viewerEmployeeId } });
-    const viewerDept = findDepartmentId(units, viewer.organizationUnitId);
-    const targetDept = findDepartmentId(units, employee.organizationUnitId);
-    if (viewerDept === null || viewerDept !== targetDept) redirect("/");
+  if (!(await canViewResume(viewerEmployeeId, viewerRole, employeeId, employee.organizationUnitId))) {
+    redirect("/");
   }
 
   const skillsByCategory = new Map<string, typeof employee.skills>();
@@ -185,10 +124,7 @@ export default async function CareerDetailPage({
         <h2 className="font-medium">プロジェクト経歴</h2>
         {employee.projects.length === 0 && <p className="text-sm text-gray-500">未登録</p>}
         {employee.projects.map((project) => {
-          const detail = project.detail;
-          const activeProcesses = detail
-            ? PROCESS_FIELDS.filter((field) => detail[field])
-            : [];
+          const activeProcesses = getActiveProcesses(project.detail);
           return (
             <div key={project.id} className="rounded-lg border border-gray-200 p-4 text-sm">
               <p className="font-medium">
@@ -225,9 +161,12 @@ export default async function CareerDetailPage({
       </section>
 
       <div className="flex w-full max-w-2xl justify-end gap-2">
-        <span className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-400">
-          PDF出力(準備中)
-        </span>
+        <Link
+          href={`/careers/${employeeId}/preview`}
+          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+        >
+          PDF出力
+        </Link>
         <span className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-400">
           Excel出力(準備中)
         </span>

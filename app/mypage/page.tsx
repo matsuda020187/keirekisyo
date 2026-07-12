@@ -85,9 +85,12 @@ export default async function MyPage() {
         >
           プレビュー
         </Link>
-        <span className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-400">
-          PDF出力(準備中)
-        </span>
+        <Link
+          href={`/careers/${employeeId}/preview?from=mypage`}
+          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+        >
+          PDF出力
+        </Link>
         <span className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-400">
           Excel出力(準備中)
         </span>
