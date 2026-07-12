@@ -1,0 +1,463 @@
+// 一次情報: docs/schema.md（全16テーブル）。変更前に必ず参照すること。
+
+generator client {
+  provider   = "prisma-client"
+  output     = "../generated/prisma"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// 組織単位マスタ（事業部＞部署＞Gr の3階層、自己参照）
+// ---------------------------------------------------------------------------
+
+enum OrganizationUnitLevel {
+  DIVISION // 1:事業部
+  SECTION // 2:部署
+  GROUP // 3:Gr
+}
+
+model OrganizationUnit {
+  id       Int                   @id @default(autoincrement())
+  parentId Int?                  @map("parent_id")
+  parent   OrganizationUnit?     @relation("OrganizationUnitHierarchy", fields: [parentId], references: [id])
+  children OrganizationUnit[]    @relation("OrganizationUnitHierarchy")
+  unitName String                @map("unit_name") @db.VarChar(100)
+  unitLevel OrganizationUnitLevel @map("unit_level")
+
+  employees Employee[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("organization_unit")
+}
+
+// ---------------------------------------------------------------------------
+// 社員基本情報
+// ---------------------------------------------------------------------------
+
+enum EmploymentStatus {
+  ACTIVE // 1:現職
+  RETIRED // 2:退職
+}
+
+enum Gender {
+  MALE // 1:男性
+  FEMALE // 2:女性
+  OTHER // 3:その他
+}
+
+enum FinalSchoolType {
+  HIGH_SCHOOL // 1:高校
+  VOCATIONAL_SCHOOL // 2:専門学校
+  JUNIOR_COLLEGE // 3:短大
+  UNIVERSITY // 4:大学
+  GRADUATE_SCHOOL // 5:大学院
+}
+
+enum GraduationStatus {
+  GRADUATED // 1:卒業
+  WITHDRAWN // 2:中退
+}
+
+model Employee {
+  employeeId          String                @id @map("employee_id") @db.VarChar(6)
+  isRegistered        Boolean               @default(false) @map("is_registered")
+  employmentStatus    EmploymentStatus      @default(ACTIVE) @map("employment_status")
+  organizationUnitId  Int?                  @map("organization_unit_id")
+  organizationUnit    OrganizationUnit?     @relation(fields: [organizationUnitId], references: [id])
+  name                String?               @db.VarChar(50)
+  nameKana            String?               @map("name_kana") @db.VarChar(50)
+  birthDate           DateTime?             @map("birth_date") @db.Date
+  gender              Gender?
+  experienceYears     Int?                  @map("experience_years")
+  careerSummary       String?               @map("career_summary")
+  selfPr              String?               @map("self_pr")
+  nearestStationLine  String?               @map("nearest_station_line") @db.VarChar(100)
+  nearestStationName  String?               @map("nearest_station_name") @db.VarChar(100)
+  finalSchoolName     String?               @map("final_school_name") @db.VarChar(100)
+  finalDepartmentName String?               @map("final_department_name") @db.VarChar(100)
+  finalSchoolType     FinalSchoolType?      @map("final_school_type")
+  graduationYearMonth DateTime?             @map("graduation_year_month") @db.Date
+  graduationStatus    GraduationStatus?     @map("graduation_status")
+
+  userAccount   UserAccount?
+  skills        EmployeeSkill[]
+  certifications EmployeeCertification[]
+  projects      Project[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("employee")
+}
+
+// ---------------------------------------------------------------------------
+// ログインアカウント
+// ---------------------------------------------------------------------------
+
+enum AuthProvider {
+  AZURE_AD
+  GOOGLE
+  GITHUB
+}
+
+enum AccountRole {
+  GENERAL_STAFF // 1:一般社員
+  HR_SALES // 2:人事・営業
+  MANAGER // 3:管理職
+}
+
+model UserAccount {
+  id           Int           @id @default(autoincrement())
+  employeeId   String        @unique @map("employee_id") @db.VarChar(6)
+  employee     Employee      @relation(fields: [employeeId], references: [employeeId])
+  email        String        @unique @db.VarChar(100)
+  externalId   String?       @unique @map("external_id") @db.VarChar(255)
+  authProvider AuthProvider? @map("auth_provider")
+  role         AccountRole
+  lastLoginAt  DateTime?     @map("last_login_at")
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("user_account")
+}
+
+// ---------------------------------------------------------------------------
+// スキル関連マスタ
+// ---------------------------------------------------------------------------
+
+model SkillCategory {
+  id                Int      @id @default(autoincrement())
+  skillCategoryName String   @map("skill_category_name") @db.VarChar(100)
+  skills            Skill[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("skill_category")
+}
+
+model Skill {
+  id              Int             @id @default(autoincrement())
+  skillCategoryId Int             @map("skill_category_id")
+  skillCategory   SkillCategory   @relation(fields: [skillCategoryId], references: [id])
+  skillName       String          @unique @map("skill_name") @db.VarChar(100)
+  hasVersion      Boolean         @default(false) @map("has_version")
+
+  versions       SkillVersion[]
+  employeeSkills EmployeeSkill[]
+  projectSkills  ProjectSkill[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("skill")
+}
+
+model SkillVersion {
+  id          Int     @id @default(autoincrement())
+  skillId     Int     @map("skill_id")
+  skill       Skill   @relation(fields: [skillId], references: [id])
+  versionName String  @map("version_name") @db.VarChar(50)
+  isActive    Boolean @default(true) @map("is_active")
+  displayName String? @map("display_name") @db.VarChar(100)
+
+  employeeSkills EmployeeSkill[]
+  projectSkills  ProjectSkill[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("skill_version")
+}
+
+enum SkillLevel {
+  EXPERT // 1:◎
+  PROFICIENT // 2:○
+  BASIC // 3:△
+}
+
+model EmployeeSkill {
+  id             Int           @id @default(autoincrement())
+  employeeId     String        @map("employee_id") @db.VarChar(6)
+  employee       Employee      @relation(fields: [employeeId], references: [employeeId])
+  skillId        Int           @map("skill_id")
+  skill          Skill         @relation(fields: [skillId], references: [id])
+  skillVersionId Int?          @map("skill_version_id")
+  skillVersion   SkillVersion? @relation(fields: [skillVersionId], references: [id])
+  skillLevel     SkillLevel    @map("skill_level")
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  // NOTE: 本来は (employee_id, skill_id, skill_version_id) に
+  // UNIQUE NULLS NOT DISTINCT を付与する(docs/decisions.md参照)。
+  // Prisma 7はこの構文を未サポートのため、`prisma migrate dev`後に
+  // 生成されたマイグレーションSQLの CREATE UNIQUE INDEX 末尾へ
+  // 手動で `NULLS NOT DISTINCT` を追記する運用とする。
+  @@unique([employeeId, skillId, skillVersionId])
+  @@map("employee_skill")
+}
+
+// ---------------------------------------------------------------------------
+// 資格関連マスタ
+// ---------------------------------------------------------------------------
+
+model CertificationCategory {
+  id                          Int             @id @default(autoincrement())
+  certificationCategoryName String          @map("certification_category_name") @db.VarChar(100)
+  certifications              Certification[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("certification_category")
+}
+
+model Certification {
+  id                         Int                    @id @default(autoincrement())
+  certificationCategoryId    Int                    @map("certification_category_id")
+  certificationCategory      CertificationCategory  @relation(fields: [certificationCategoryId], references: [id])
+  certificationName          String                 @unique @map("certification_name") @db.VarChar(100)
+  certificationOrganization  String                 @map("certification_organization") @db.VarChar(100)
+
+  employeeCertifications EmployeeCertification[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("certification")
+}
+
+model EmployeeCertification {
+  id               Int            @id @default(autoincrement())
+  employeeId       String         @map("employee_id") @db.VarChar(6)
+  employee         Employee       @relation(fields: [employeeId], references: [employeeId])
+  certificationId  Int            @map("certification_id")
+  certification    Certification  @relation(fields: [certificationId], references: [id])
+  acquiredDate     DateTime       @map("acquired_date") @db.Date
+  expirationDate   DateTime?      @map("expiration_date") @db.Date
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("employee_certification")
+}
+
+// ---------------------------------------------------------------------------
+// 現場・プロジェクト経歴
+// ---------------------------------------------------------------------------
+
+model Site {
+  id       Int       @id @default(autoincrement())
+  siteName String    @unique @map("site_name") @db.VarChar(100)
+  projects Project[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("site")
+}
+
+model Project {
+  id            Int       @id @default(autoincrement())
+  employeeId    String    @map("employee_id") @db.VarChar(6)
+  employee      Employee  @relation(fields: [employeeId], references: [employeeId])
+  siteId        Int       @map("site_id")
+  site          Site      @relation(fields: [siteId], references: [id])
+  projectTitle  String    @map("project_title") @db.VarChar(100)
+  industry      String?   @db.VarChar(100)
+  projectSummary String?  @map("project_summary")
+  startDate     DateTime  @map("start_date") @db.Date
+  endDate       DateTime? @map("end_date") @db.Date
+  totalTeamSize String?   @map("total_team_size") @db.VarChar(100)
+  teamSize      String?   @map("team_size") @db.VarChar(100)
+
+  detail    ProjectDetail?
+  roleLinks ProjectRoleLink[]
+  skills    ProjectSkill[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("project")
+}
+
+model ProjectRole {
+  id              Int               @id @default(autoincrement())
+  projectRoleName String            @unique @map("project_role_name") @db.VarChar(20)
+  links           ProjectRoleLink[]
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("project_role")
+}
+
+model ProjectRoleLink {
+  id            Int         @id @default(autoincrement())
+  projectId     Int         @map("project_id")
+  project       Project     @relation(fields: [projectId], references: [id])
+  projectRoleId Int         @map("project_role_id")
+  projectRole   ProjectRole @relation(fields: [projectRoleId], references: [id])
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@unique([projectId, projectRoleId])
+  @@map("project_role_link")
+}
+
+model ProjectDetail {
+  id                      Int      @id @default(autoincrement())
+  projectId               Int      @unique @map("project_id")
+  project                 Project  @relation(fields: [projectId], references: [id])
+  overview                String?  @db.VarChar(300)
+  researchAnalysis        Boolean? @map("research_analysis")
+  requirementsDefinition  Boolean? @map("requirements_definition")
+  basicDesign             Boolean? @map("basic_design")
+  detailedDesign          Boolean? @map("detailed_design")
+  development             Boolean?
+  testing                 Boolean?
+  operation               Boolean?
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  @@map("project_detail")
+}
+
+model ProjectSkill {
+  id             Int           @id @default(autoincrement())
+  projectId      Int           @map("project_id")
+  project        Project       @relation(fields: [projectId], references: [id])
+  skillId        Int           @map("skill_id")
+  skill          Skill         @relation(fields: [skillId], references: [id])
+  skillVersionId Int?          @map("skill_version_id")
+  skillVersion   SkillVersion? @relation(fields: [skillVersionId], references: [id])
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.VarChar(6)
+  createdProgram String?   @map("created_program") @db.VarChar(100)
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.VarChar(6)
+  updatedProgram String?   @map("updated_program") @db.VarChar(100)
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.VarChar(6)
+  deletedProgram String?   @map("deleted_program") @db.VarChar(100)
+
+  // NOTE: employee_skillと同様、NULLS NOT DISTINCTはマイグレーションSQLへ手動追記する。
+  @@unique([projectId, skillId, skillVersionId])
+  @@map("project_skill")
+}
