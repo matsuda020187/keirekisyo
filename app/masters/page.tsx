@@ -8,7 +8,7 @@ const MASTER_LINKS: MasterLink[] = [
   { label: "スキルマスタ管理" },
   { label: "資格マスタ管理", href: "/masters/certifications" },
   { label: "現場ポジションマスタ管理", href: "/masters/project-roles" },
-  { label: "部署マスタ管理" },
+  { label: "部署マスタ管理", href: "/masters/organization-units" },
   { label: "現場マスタ管理", href: "/masters/sites" },
 ];
 
