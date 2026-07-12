@@ -7,6 +7,7 @@ type SummaryRow = {
   label: string;
   detail: string;
   href?: string; // 遷移先が未実装の間はリンクを出さない
+  linkLabel?: string;
 };
 
 export default async function MyPage() {
@@ -41,7 +42,12 @@ export default async function MyPage() {
       detail: `${employee._count.certifications}件`,
       href: "/certifications",
     },
-    { label: "プロジェクト経歴", detail: `${employee._count.projects}件` },
+    {
+      label: "プロジェクト経歴",
+      detail: `${employee._count.projects}件`,
+      href: "/projects",
+      linkLabel: "一覧",
+    },
   ];
 
   return (
@@ -63,7 +69,7 @@ export default async function MyPage() {
                 href={row.href}
                 className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
               >
-                編集
+                {row.linkLabel ?? "編集"}
               </Link>
             ) : (
               <span className="text-sm text-gray-400">準備中</span>
