@@ -29,7 +29,11 @@ export default async function MyPage() {
 
   const rows: SummaryRow[] = [
     { label: "基本情報", detail: employee.name ?? "未登録", href: "/register" },
-    { label: "経歴概要・自己PR", detail: employee.careerSummary ? "登録済み" : "未登録" },
+    {
+      label: "経歴概要・自己PR",
+      detail: employee.careerSummary ? "登録済み" : "未登録",
+      href: "/career-summary",
+    },
     { label: "スキル", detail: `${employee._count.skills}件` },
     { label: "資格", detail: `${employee._count.certifications}件` },
     { label: "プロジェクト経歴", detail: `${employee._count.projects}件` },
