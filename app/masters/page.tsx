@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
@@ -5,7 +6,7 @@ type MasterLink = { label: string; href?: string };
 
 const MASTER_LINKS: MasterLink[] = [
   { label: "スキルマスタ管理" },
-  { label: "資格マスタ管理" },
+  { label: "資格マスタ管理", href: "/masters/certifications" },
   { label: "現場ポジションマスタ管理", href: "/masters/project-roles" },
   { label: "部署マスタ管理" },
   { label: "現場マスタ管理", href: "/masters/sites" },
@@ -30,12 +31,12 @@ export default async function MastersPage() {
           >
             <span>{item.label}</span>
             {item.href ? (
-              <a
+              <Link
                 href={item.href}
                 className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
               >
                 開く
-              </a>
+              </Link>
             ) : (
               <span className="text-sm text-gray-400">準備中</span>
             )}

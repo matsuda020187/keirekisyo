@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -67,12 +68,12 @@ export default async function ProjectRoleMasterPage({
                 >
                   保存
                 </button>
-                <a
+                <Link
                   href="/masters/project-roles"
                   className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
                 >
                   キャンセル
-                </a>
+                </Link>
               </form>
             </li>
           ) : (
@@ -82,12 +83,12 @@ export default async function ProjectRoleMasterPage({
             >
               <span>{item.projectRoleName}</span>
               <div className="flex gap-2">
-                <a
+                <Link
                   href={`/masters/project-roles?edit=${item.id}`}
                   className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
                 >
                   編集
-                </a>
+                </Link>
                 <DeleteConfirmButton
                   message={`「${item.projectRoleName}」を削除してもよろしいですか？`}
                   action={deleteProjectRole.bind(null, item.id)}

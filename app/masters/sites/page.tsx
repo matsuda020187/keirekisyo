@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -67,12 +68,12 @@ export default async function SiteMasterPage({
                 >
                   保存
                 </button>
-                <a
+                <Link
                   href="/masters/sites"
                   className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
                 >
                   キャンセル
-                </a>
+                </Link>
               </form>
             </li>
           ) : (
@@ -82,12 +83,12 @@ export default async function SiteMasterPage({
             >
               <span>{item.siteName}</span>
               <div className="flex gap-2">
-                <a
+                <Link
                   href={`/masters/sites?edit=${item.id}`}
                   className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
                 >
                   編集
-                </a>
+                </Link>
                 <DeleteConfirmButton
                   message={`「${item.siteName}」を削除してもよろしいですか？`}
                   action={deleteSite.bind(null, item.id)}

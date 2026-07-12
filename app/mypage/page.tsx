@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -54,12 +55,12 @@ export default async function MyPage() {
               <p className="text-sm text-gray-500">{row.detail}</p>
             </div>
             {row.href ? (
-              <a
+              <Link
                 href={row.href}
                 className="rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
               >
                 編集
-              </a>
+              </Link>
             ) : (
               <span className="text-sm text-gray-400">準備中</span>
             )}
