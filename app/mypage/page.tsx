@@ -36,7 +36,11 @@ export default async function MyPage() {
       href: "/career-summary",
     },
     { label: "スキル", detail: `${employee._count.skills}件` },
-    { label: "資格", detail: `${employee._count.certifications}件` },
+    {
+      label: "資格",
+      detail: `${employee._count.certifications}件`,
+      href: "/certifications",
+    },
     { label: "プロジェクト経歴", detail: `${employee._count.projects}件` },
   ];
 
