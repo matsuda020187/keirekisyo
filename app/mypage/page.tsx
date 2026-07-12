@@ -77,6 +77,21 @@ export default async function MyPage() {
           </div>
         ))}
       </div>
+
+      <div className="flex w-full max-w-xl justify-end gap-2">
+        <Link
+          href={`/careers/${employeeId}`}
+          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+        >
+          プレビュー
+        </Link>
+        <span className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-400">
+          PDF出力(準備中)
+        </span>
+        <span className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-400">
+          Excel出力(準備中)
+        </span>
+      </div>
     </main>
   );
 }

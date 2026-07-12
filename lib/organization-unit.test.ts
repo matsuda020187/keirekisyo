@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildOrganizationTree,
   expandOrganizationUnitIds,
+  findDepartmentId,
   resolveOrganizationSelection,
   resolveOrganizationUnitId,
   type OrganizationUnitRow,
@@ -87,6 +88,24 @@ describe("resolveOrganizationUnitId", () => {
     expect(resolveOrganizationUnitId({ divisionId: null, sectionId: null, groupId: null })).toBe(
       null,
     );
+  });
+});
+
+describe("findDepartmentId", () => {
+  it("returns the department itself when given a group id", () => {
+    expect(findDepartmentId(units, 3)).toBe(2);
+  });
+
+  it("returns the department id when given a section id", () => {
+    expect(findDepartmentId(units, 5)).toBe(5);
+  });
+
+  it("returns null for a division with no department (division直下所属)", () => {
+    expect(findDepartmentId(units, 6)).toBe(null);
+  });
+
+  it("returns null for an unaffiliated employee (unitId=null)", () => {
+    expect(findDepartmentId(units, null)).toBe(null);
   });
 });
 

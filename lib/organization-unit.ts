@@ -86,6 +86,21 @@ export function resolveOrganizationUnitId(selection: OrganizationSelection): num
   return selection.groupId ?? selection.sectionId ?? selection.divisionId ?? null;
 }
 
+// 「同一部署」判定(REF002/REF003/REF008共通)。所属組織単位から親を遡って
+// 最初に到達する部署(unit_level=SECTION)のidを返す。事業部直下所属・未所属は
+// 部署を持たないためnullを返す(docs/screens.md REF002参照)。
+export function findDepartmentId(units: OrganizationUnitRow[], unitId: number | null): number | null {
+  if (unitId === null) return null;
+
+  const byId = new Map(units.map((unit) => [unit.id, unit]));
+  let current = byId.get(unitId);
+  while (current) {
+    if (current.unitLevel === "SECTION") return current.id;
+    current = current.parentId !== null ? byId.get(current.parentId) : undefined;
+  }
+  return null;
+}
+
 // 組織フィルタ(REF002/REF007等)で「上位を選ぶと配下も含めて検索」を実現するため、
 // 選択されたidに配下の全idを加えて返す(選択id自身も含む)。
 export function expandOrganizationUnitIds(
