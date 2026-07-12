@@ -85,3 +85,30 @@ export function resolveOrganizationSelection(
 export function resolveOrganizationUnitId(selection: OrganizationSelection): number | null {
   return selection.groupId ?? selection.sectionId ?? selection.divisionId ?? null;
 }
+
+// 組織フィルタ(REF002/REF007等)で「上位を選ぶと配下も含めて検索」を実現するため、
+// 選択されたidに配下の全idを加えて返す(選択id自身も含む)。
+export function expandOrganizationUnitIds(
+  units: OrganizationUnitRow[],
+  selectedIds: number[],
+): number[] {
+  if (selectedIds.length === 0) return [];
+
+  const childrenByParentId = new Map<number, number[]>();
+  for (const unit of units) {
+    if (unit.parentId === null) continue;
+    const siblings = childrenByParentId.get(unit.parentId) ?? [];
+    siblings.push(unit.id);
+    childrenByParentId.set(unit.parentId, siblings);
+  }
+
+  const result = new Set<number>();
+  const stack = [...selectedIds];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (id === undefined || result.has(id)) continue;
+    result.add(id);
+    stack.push(...(childrenByParentId.get(id) ?? []));
+  }
+  return [...result];
+}

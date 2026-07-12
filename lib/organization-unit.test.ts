@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOrganizationTree,
+  expandOrganizationUnitIds,
   resolveOrganizationSelection,
   resolveOrganizationUnitId,
   type OrganizationUnitRow,
@@ -86,5 +87,27 @@ describe("resolveOrganizationUnitId", () => {
     expect(resolveOrganizationUnitId({ divisionId: null, sectionId: null, groupId: null })).toBe(
       null,
     );
+  });
+});
+
+describe("expandOrganizationUnitIds", () => {
+  it("returns an empty array when nothing is selected", () => {
+    expect(expandOrganizationUnitIds(units, [])).toEqual([]);
+  });
+
+  it("expands a division to include all of its sections and groups", () => {
+    expect(new Set(expandOrganizationUnitIds(units, [1]))).toEqual(new Set([1, 2, 3, 4, 5]));
+  });
+
+  it("expands a section to include only its own groups", () => {
+    expect(new Set(expandOrganizationUnitIds(units, [2]))).toEqual(new Set([2, 3, 4]));
+  });
+
+  it("returns just the id itself for a leaf group", () => {
+    expect(expandOrganizationUnitIds(units, [3])).toEqual([3]);
+  });
+
+  it("de-duplicates overlapping selections", () => {
+    expect(new Set(expandOrganizationUnitIds(units, [1, 2]))).toEqual(new Set([1, 2, 3, 4, 5]));
   });
 });
