@@ -20,6 +20,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (!account || !user.email) return false;
 
+      // 開発環境限定のダミーログイン(lib/auth.config.ts参照)。
+      // 本番では登録されないプロバイダなので、NODE_ENVに関わらずここでの分岐は安全。
+      if (account.provider === "dev-credentials") {
+        const userAccount = await prisma.userAccount.findUnique({
+          where: { email: user.email },
+          include: { employee: true },
+        });
+        if (!userAccount) return "/login?error=unregistered";
+        if (userAccount.employee.employmentStatus === "RETIRED") {
+          return "/login?error=retired";
+        }
+        await prisma.userAccount.update({
+          where: { id: userAccount.id },
+          data: { lastLoginAt: new Date() },
+        });
+        return true;
+      }
+
       const provider = PROVIDER_MAP[account.provider];
       if (!provider) return false;
 

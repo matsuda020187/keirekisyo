@@ -69,6 +69,36 @@ export default async function LoginPage({
             GitHubアカウントでログイン
           </button>
         </form>
+
+        {process.env.NODE_ENV !== "production" && (
+          <form
+            action={async (formData) => {
+              "use server";
+              await signIn("dev-credentials", {
+                email: formData.get("email"),
+                redirectTo: "/",
+              });
+            }}
+            className="mt-4 flex flex-col gap-2 border-t border-dashed border-gray-300 pt-4"
+          >
+            <p className="text-xs text-gray-500">
+              開発用ログイン(本番では表示されません)
+            </p>
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="user_account.emailに登録済みのメールアドレス"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-md border border-dashed border-gray-400 px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              開発用ログイン
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );

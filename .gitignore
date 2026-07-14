@@ -45,3 +45,6 @@ next-env.d.ts
 
 # claude code (harness/README.md参照)
 .claude/settings.local.json
+
+# playwright mcp (ui-checkスキル等の実行時に生成されるスクラッチ出力)
+.playwright-mcp/
