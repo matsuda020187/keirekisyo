@@ -1,149 +1,60 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import {
-  buildOrganizationTree,
-  expandOrganizationUnitIds,
-  findDepartmentId,
-  type OrganizationDivisionNode,
-} from "@/lib/organization-unit";
+import { buildHolderLine, filterSkillMapAggregate } from "@/lib/skill-map-data";
+import { loadSkillMap } from "@/lib/skill-map-loader";
+import { CertificationPanel } from "./CertificationPanel";
+import { SkillPanel } from "./SkillPanel";
 
-type OrgRow = { id: number; unitName: string; depth: number };
-
-function flattenTree(tree: OrganizationDivisionNode[]): OrgRow[] {
-  const rows: OrgRow[] = [];
-  for (const division of tree) {
-    rows.push({ id: division.id, unitName: division.unitName, depth: 0 });
-    for (const section of division.sections) {
-      rows.push({ id: section.id, unitName: section.unitName, depth: 1 });
-      for (const group of section.groups) {
-        rows.push({ id: group.id, unitName: group.unitName, depth: 2 });
-      }
-    }
-  }
-  return rows;
-}
-
-type Holder = { employeeId: string; name: string; visible: boolean };
-
-function buildHolderLine(holders: Holder[]): string {
-  const visibleNames = holders.filter((h) => h.visible).map((h) => h.name);
-  const hiddenCount = holders.length - visibleNames.length;
-  const parts = [...visibleNames];
-  if (hiddenCount > 0) parts.push(`他${hiddenCount}名`);
-  return parts.join("、");
+function heatCellClass(value: number, max: number): string {
+  if (value === 0) return "bg-gray-100 text-gray-400";
+  const ratio = max > 0 ? value / max : 0;
+  if (ratio >= 0.8) return "bg-blue-600 text-white";
+  if (ratio >= 0.55) return "bg-blue-500 text-white";
+  if (ratio >= 0.3) return "bg-blue-300 text-blue-900";
+  return "bg-blue-100 text-blue-800";
 }
 
 export default async function SkillMapPage({
   searchParams,
 }: {
-  searchParams: Promise<{ org?: string }>;
+  searchParams: Promise<{ org?: string; q?: string }>;
 }) {
   const session = await auth();
   const viewerEmployeeId = session?.user.employeeId;
   const viewerRole = session?.user.role;
   if (!viewerEmployeeId || !viewerRole) redirect("/login");
 
-  const { org } = await searchParams;
+  const { org, q } = await searchParams;
   const selectedOrgId = org ? Number(org) : null;
+  const query = q ?? "";
 
-  const units = await prisma.organizationUnit.findMany({
-    where: { deletedAt: null },
-    orderBy: [{ unitLevel: "asc" }, { unitName: "asc" }],
+  const { aggregate: rawAggregate, orgRows } = await loadSkillMap({
+    selectedOrgId,
+    viewerEmployeeId,
+    viewerRole,
   });
-  const orgRows = flattenTree(buildOrganizationTree(units));
+  const aggregate = filterSkillMapAggregate(rawAggregate, query);
+  const { stats, certCategories, skillCategories, heatmap, riskSkills } = aggregate;
 
-  const scopeOrgIds = selectedOrgId ? expandOrganizationUnitIds(units, [selectedOrgId]) : null;
-
-  const employees = await prisma.employee.findMany({
-    where: {
-      deletedAt: null,
-      employmentStatus: "ACTIVE",
-      organizationUnitId: scopeOrgIds ? { in: scopeOrgIds } : undefined,
-    },
-    include: {
-      skills: {
-        where: { deletedAt: null },
-        include: { skill: { include: { skillCategory: true } } },
-      },
-      certifications: {
-        where: { deletedAt: null },
-        include: { certification: { include: { certificationCategory: true } } },
-      },
-    },
-  });
-
-  // 一般社員は同一部署の社員のみ氏名表示、それ以外は人数のみ(docs/decisions.md参照)
-  let viewerDepartmentId: number | null = null;
-  if (viewerRole === "GENERAL_STAFF") {
-    const viewer = await prisma.employee.findUniqueOrThrow({ where: { employeeId: viewerEmployeeId } });
-    viewerDepartmentId = findDepartmentId(units, viewer.organizationUnitId);
-  }
-
-  function canViewName(targetEmployeeId: string, targetOrgUnitId: number | null): boolean {
-    if (viewerRole !== "GENERAL_STAFF") return true;
-    if (targetEmployeeId === viewerEmployeeId) return true;
-    if (viewerDepartmentId === null) return false;
-    return findDepartmentId(units, targetOrgUnitId) === viewerDepartmentId;
-  }
-
-  type SkillAgg = { skillName: string; categoryName: string; holders: Holder[] };
-  const skillAgg = new Map<number, SkillAgg>();
-  type CertAgg = { certificationName: string; categoryName: string; holders: Holder[] };
-  const certAgg = new Map<number, CertAgg>();
-
-  for (const employee of employees) {
-    for (const es of employee.skills) {
-      const entry = skillAgg.get(es.skillId) ?? {
-        skillName: es.skill.skillName,
-        categoryName: es.skill.skillCategory.skillCategoryName,
-        holders: [],
-      };
-      entry.holders.push({
-        employeeId: employee.employeeId,
-        name: employee.name ?? "(未登録)",
-        visible: canViewName(employee.employeeId, employee.organizationUnitId),
-      });
-      skillAgg.set(es.skillId, entry);
-    }
-    for (const ec of employee.certifications) {
-      const entry = certAgg.get(ec.certificationId) ?? {
-        certificationName: ec.certification.certificationName,
-        categoryName: ec.certification.certificationCategory.certificationCategoryName,
-        holders: [],
-      };
-      entry.holders.push({
-        employeeId: employee.employeeId,
-        name: employee.name ?? "(未登録)",
-        visible: canViewName(employee.employeeId, employee.organizationUnitId),
-      });
-      certAgg.set(ec.certificationId, entry);
-    }
-  }
-
-  const skillByCategory = new Map<string, { skillName: string; holders: Holder[] }[]>();
-  for (const entry of skillAgg.values()) {
-    const list = skillByCategory.get(entry.categoryName) ?? [];
-    list.push({ skillName: entry.skillName, holders: entry.holders });
-    skillByCategory.set(entry.categoryName, list);
-  }
-
-  const certByCategory = new Map<string, { certificationName: string; holders: Holder[] }[]>();
-  for (const entry of certAgg.values()) {
-    const list = certByCategory.get(entry.categoryName) ?? [];
-    list.push({ certificationName: entry.certificationName, holders: entry.holders });
-    certByCategory.set(entry.categoryName, list);
-  }
+  const exportParams = new URLSearchParams();
+  if (selectedOrgId) exportParams.set("org", String(selectedOrgId));
+  if (query) exportParams.set("q", query);
+  const exportQuery = exportParams.toString() ? `?${exportParams.toString()}` : "";
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-6 p-8">
-      <h1 className="text-2xl font-bold">スキルマップ／組織ダッシュボード</h1>
+    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6 md:p-8">
+      <div>
+        <h1 className="text-2xl font-bold">スキルマップ／組織ダッシュボード</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          組織単位ごとのスキル・資格保有状況を可視化します。保有者名の表示は経歴書の閲覧権限に連動します。
+        </p>
+      </div>
 
-      <form method="get" className="flex w-full max-w-2xl gap-2">
+      <form method="get" className="flex flex-wrap gap-2">
         <select
           name="org"
           defaultValue={selectedOrgId ?? ""}
-          className="w-full rounded-md border border-gray-300 px-3 py-2"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
         >
           <option value="">全社</option>
           {orgRows.map((row) => (
@@ -153,48 +64,165 @@ export default async function SkillMapPage({
             </option>
           ))}
         </select>
+        <input
+          type="search"
+          name="q"
+          defaultValue={query}
+          placeholder="スキル・資格・氏名で検索"
+          className="min-w-60 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
         <button
           type="submit"
-          className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
         >
           集計
         </button>
       </form>
 
-      <section className="w-full max-w-2xl rounded-lg border border-gray-200 p-4">
-        <h2 className="mb-2 font-medium">スキル別保有者数</h2>
-        {skillByCategory.size === 0 && <p className="text-sm text-gray-500">該当データがありません</p>}
-        {[...skillByCategory.entries()].map(([category, list]) => (
-          <div key={category} className="mb-3">
-            <p className="text-sm font-medium text-gray-600">{category}</p>
-            {list.map((item) => (
-              <details key={item.skillName} className="ml-2 border-b border-gray-100 py-1">
-                <summary className="cursor-pointer text-sm">
-                  {item.skillName}({item.holders.length}名)
-                </summary>
-                <p className="mt-1 ml-4 text-sm text-gray-600">{buildHolderLine(item.holders)}</p>
-              </details>
-            ))}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">登録メンバー数</p>
+          <p className="text-2xl font-bold">
+            {stats.memberCount}
+            <span className="ml-1 text-xs font-medium text-gray-500">名</span>
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">登録スキル種類</p>
+          <p className="text-2xl font-bold">
+            {stats.skillTypeCount}
+            <span className="ml-1 text-xs font-medium text-gray-500">種類</span>
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">資格保有件数</p>
+          <p className="text-2xl font-bold">
+            {stats.certificationCount}
+            <span className="ml-1 text-xs font-medium text-gray-500">件</span>
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">⚠ 保有者1名のスキル</p>
+          <p className="text-2xl font-bold text-red-600">
+            {stats.rareSkillCount}
+            <span className="ml-1 text-xs font-medium text-gray-500">件</span>
+          </p>
+        </div>
+      </div>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">資格別保有者数</h2>
+            <p className="text-xs text-gray-500">タブで資格カテゴリを切り替えられます</p>
           </div>
-        ))}
+          <a
+            href={`/api/skill-map/export/certifications${exportQuery}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-green-700 px-4 py-2 text-xs font-semibold text-white hover:bg-green-800"
+          >
+            Excel出力
+          </a>
+        </div>
+        {certCategories.length === 0 ? (
+          <p className="text-sm text-gray-500">該当データがありません</p>
+        ) : (
+          <CertificationPanel categories={certCategories} />
+        )}
       </section>
 
-      <section className="w-full max-w-2xl rounded-lg border border-gray-200 p-4">
-        <h2 className="mb-2 font-medium">資格別保有者数</h2>
-        {certByCategory.size === 0 && <p className="text-sm text-gray-500">該当データがありません</p>}
-        {[...certByCategory.entries()].map(([category, list]) => (
-          <div key={category} className="mb-3">
-            <p className="text-sm font-medium text-gray-600">{category}</p>
-            {list.map((item) => (
-              <details key={item.certificationName} className="ml-2 border-b border-gray-100 py-1">
-                <summary className="cursor-pointer text-sm">
-                  {item.certificationName}({item.holders.length}名)
-                </summary>
-                <p className="mt-1 ml-4 text-sm text-gray-600">{buildHolderLine(item.holders)}</p>
-              </details>
+      <section className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">スキル別保有者数</h2>
+            <p className="text-xs text-gray-500">
+              カテゴリ内で保有者数の多い順に上位10件を表示し、「すべて表示」で全件展開できます
+            </p>
+          </div>
+          <a
+            href={`/api/skill-map/export/skills${exportQuery}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-green-700 px-4 py-2 text-xs font-semibold text-white hover:bg-green-800"
+          >
+            Excel出力
+          </a>
+        </div>
+        {skillCategories.length === 0 ? (
+          <p className="text-sm text-gray-500">該当データがありません</p>
+        ) : (
+          <SkillPanel categories={skillCategories} />
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h2 className="text-sm font-semibold">部署×スキルカテゴリ ヒートマップ</h2>
+        <p className="mb-4 text-xs text-gray-500">色が濃いほど保有者(実人数)が多いことを示します</p>
+        {heatmap.departments.length === 0 || heatmap.categories.length === 0 ? (
+          <p className="text-sm text-gray-500">該当データがありません</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className="p-1.5 text-left text-gray-500"></th>
+                  {heatmap.categories.map((category) => (
+                    <th key={category.id} className="p-1.5 text-center font-semibold text-gray-500">
+                      {category.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {heatmap.departments.map((department, rowIndex) => (
+                  <tr key={department.id}>
+                    <th className="whitespace-nowrap p-1.5 text-left font-medium">{department.name}</th>
+                    {heatmap.grid[rowIndex].map((value, colIndex) => (
+                      <td
+                        key={heatmap.categories[colIndex].id}
+                        className={`rounded-md p-2.5 text-center font-bold ${heatCellClass(value, heatmap.max)}`}
+                      >
+                        {value}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">⚠ 属人化リスク(保有者1名のスキル)</h2>
+            <p className="text-xs text-gray-500">対象者の異動・退職で業務が止まる可能性があるスキルの一覧</p>
+          </div>
+          <a
+            href={`/api/skill-map/export/risk${exportQuery}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-green-700 px-4 py-2 text-xs font-semibold text-white hover:bg-green-800"
+          >
+            Excel出力
+          </a>
+        </div>
+        {riskSkills.length === 0 ? (
+          <p className="text-sm text-gray-500">該当データがありません</p>
+        ) : (
+          <div className="divide-y divide-amber-100">
+            {riskSkills.map((risk) => (
+              <div key={risk.skillId} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div>
+                  <p className="font-semibold">{risk.skillName}</p>
+                  <p className="text-xs text-gray-500">
+                    保有者: {buildHolderLine([risk.holder])}
+                    {risk.departmentName ? `(${risk.departmentName})` : ""}
+                  </p>
+                </div>
+                <span className="whitespace-nowrap rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
+                  1名のみ
+                </span>
+              </div>
             ))}
           </div>
-        ))}
+        )}
       </section>
     </main>
   );
